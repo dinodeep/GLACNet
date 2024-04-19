@@ -38,6 +38,47 @@ class EncoderCNN(nn.Module):
         features = self.linear(features)
         features = self.bn(features)
         return features
+    
+class EncoderYOLO(nn.Module):
+
+    def __init__(self, target_size):
+        super(EncoderYOLO, self).__init__()
+
+        self.yolo = torch.hub.load("ultralytics/yolov5", "yolov5s", pretrained=True)
+        for param in self.yolo.model.parameters():
+            param.requires_grad = False
+
+        # register activation to store 3 feature maps
+        self.activation = {}
+        def get_input():
+            def hook(model, input, output):
+                data = input[0]
+                self.activation["large"] = data[0].detach()
+                self.activation["medium"] = data[1].detach()
+                self.activation["small"] = data[2].detach()
+            return hook
+        self.yolo.model.model.model[24].register_forward_hook(get_input())
+
+        self.linear = nn.Linear(3 * 7 * 7 * 85, target_size)
+        self.bn = nn.BatchNorm1d(target_size, momentum=0.01)
+
+        return
+    
+    def get_params(self):
+        return list(self.linear.parameters()) + list(self.bn.parameters())
+
+    def forward(self, images):
+        _ = self.yolo(images)
+
+        act = self.activation["small"] # (B, 3, 7, 7, 85)
+        act = torch.clone(act)
+
+        B, _, _, _, _ = act.shape
+
+        act = act.reshape(B, -1)
+        act = self.linear(act)
+        act = self.bn(act)
+        return act
 
 
 class EncoderStory(nn.Module):
@@ -46,7 +87,10 @@ class EncoderStory(nn.Module):
 
         self.hidden_size = hidden_size
         self.n_layers = n_layers
-        self.cnn = EncoderCNN(img_feature_size)
+
+        # self.cnn = EncoderCNN(img_feature_size)
+        self.cnn = EncoderYOLO(img_feature_size)
+
         self.lstm = nn.LSTM(img_feature_size, hidden_size, n_layers, batch_first=True, bidirectional=True, dropout=0.5)
         self.linear = nn.Linear(hidden_size * 2 + img_feature_size, hidden_size * 2)
         self.dropout = nn.Dropout(p=0.5)

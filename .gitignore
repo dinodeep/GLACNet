@@ -1,7 +1,9 @@
 *~
 *.pyc
 *.json
+*.pt
 
+/env
 /data
 /models
 /.ipynb_checkpoints

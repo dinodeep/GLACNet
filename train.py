@@ -11,6 +11,7 @@ from model import EncoderStory, DecoderStory
 from torch.autograd import Variable
 from torchvision import transforms
 from PIL import Image
+from tqdm import tqdm
 
 def to_var(x):
     if torch.cuda.is_available():
@@ -76,7 +77,7 @@ def main(args):
         encoder.train()
         decoder.train()
         avg_loss = 0.0
-        for bi, (image_stories, targets_set, lengths_set, photo_squence_set, album_ids_set) in enumerate(train_data_loader):
+        for bi, (image_stories, targets_set, lengths_set, photo_squence_set, album_ids_set) in tqdm(enumerate(train_data_loader)):
             decoder.zero_grad()
             encoder.zero_grad()
             loss = 0
@@ -84,7 +85,7 @@ def main(args):
 
             features, _ = encoder(images)
 
-            for si, data in enumerate(zip(features, targets_set, lengths_set)):
+            for si, data in tqdm(enumerate(zip(features, targets_set, lengths_set))):
                 feature = data[0]
                 captions = to_var(data[1])
                 lengths = data[2]

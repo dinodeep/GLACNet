@@ -1,11 +1,12 @@
 import argparse
 import os
 from PIL import Image
-
+import numpy as np
+import tqdm as tqdm
 
 def resize_image(image, size):
     """Resize an image to the given size."""
-    return image.resize(size, Image.ANTIALIAS)
+    return image.resize(size)
 
 def resize_images(image_dir, output_dir, size):
     """Resize the images in 'image_dir' and save into 'output_dir'."""
@@ -21,7 +22,9 @@ def resize_images(image_dir, output_dir, size):
                 with Image.open(f) as img:
                     img = resize_image(img, size)
                     img.save(os.path.join(output_dir, image), img.format)
-            except Exception:
+
+            except Exception as e:
+                print(e)
                 print("image open error : " + str(image_path))
 
         if i % 100 == 0:

@@ -3,3 +3,12 @@ nltk
 numpy
 Pillow
 argparse
+tqdm
+torch
+torchvision
+opencv-python
+pandas
+requests
+psutil
+pyyaml
+seaborn
