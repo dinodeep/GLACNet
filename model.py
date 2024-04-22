@@ -59,7 +59,7 @@ class EncoderYOLO(nn.Module):
             return hook
         self.yolo.model.model.model[24].register_forward_hook(get_input())
 
-        self.linear = nn.Linear(3 * 3 * 7 * 7 * 85, target_size)
+        self.linear = nn.Linear(1 * 3 * 7 * 7 * 85, target_size)
         self.bn = nn.BatchNorm1d(target_size, momentum=0.01)
 
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
@@ -71,17 +71,17 @@ class EncoderYOLO(nn.Module):
     def forward(self, images):
         _ = self.yolo(images)
 
-        small_act = torch.clone(self.activation["small"]) # (B, 3, 8, 8, 85)
-        medium_act = torch.clone(self.activation["medium"])
+        # small_act = torch.clone(self.activation["small"]) # (B, 3, 8, 8, 85)
+        # medium_act = torch.clone(self.activation["medium"])
         large_act = torch.clone(self.activation["large"])
 
-        B, _, _, _, _ = small_act.shape
-        small_act = small_act.reshape(B, -1)
+        # B, _, _, _, _ = small_act.shape
+        # small_act = small_act.reshape(B, -1)
 
-        B, C, H, W, L = medium_act.shape
-        medium_act = torch.permute(medium_act, (0, 1, 4, 2, 3)).reshape((B, C*L, H, W))
-        medium_act = self.pool(medium_act)
-        medium_act = medium_act.reshape(B, -1)
+        # B, C, H, W, L = medium_act.shape
+        # medium_act = torch.permute(medium_act, (0, 1, 4, 2, 3)).reshape((B, C*L, H, W))
+        # medium_act = self.pool(medium_act)
+        # medium_act = medium_act.reshape(B, -1)
 
         B, C, H, W, L = large_act.shape
         large_act= torch.permute(large_act, (0, 1, 4, 2, 3)).reshape((B, C*L, H, W))
@@ -90,7 +90,7 @@ class EncoderYOLO(nn.Module):
         large_act = large_act.reshape(B, -1)
 
         # concatenate all activations for encoding
-        act = torch.concat([small_act, medium_act, large_act], dim=1)
+        act = torch.concat([large_act], dim=1)
         act = self.linear(act)
         act = self.bn(act)
         return act
