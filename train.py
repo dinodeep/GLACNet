@@ -13,6 +13,10 @@ from torchvision import transforms
 from PIL import Image
 from tqdm import tqdm
 
+import wandb
+
+WANDB_KEY = "e50de994657c482f8a89a2d1cf9db0ae31ee0324"
+
 def to_var(x):
     if torch.cuda.is_available():
         x = x.cuda()
@@ -22,6 +26,12 @@ def main(args):
     # Create model directory
     if not os.path.exists(args.model_path):
         os.makedirs(args.model_path)
+
+    # log into wandb
+    run = wandb.init(
+        id=WANDB_KEY
+        project="11777-project-sml"
+    )
 
     # Image preprocessing
     train_transform = transforms.Compose([
@@ -99,6 +109,8 @@ def main(args):
             loss /= (args.batch_size * 5)
             loss.backward()
             optimizer.step()
+            perplexity = np.exp(loss.item())
+            wandb.log({"batch_train_loss": avg_loss.item(), "batch_train_perplexity": perplexity})
 
             # Print log info
             if bi % args.log_step == 0:
@@ -108,6 +120,7 @@ def main(args):
             
         avg_loss /= (args.batch_size * total_train_step * 5)
         print('Epoch [%d/%d], Average Train Loss: %.4f, Average Train Perplexity: %5.4f' %(epoch + 1, args.num_epochs, avg_loss, np.exp(avg_loss)))
+        wandb.log({"avg_train_loss": avg_loss, "avg_train_perplexity": np.exp(avg_loss)})
 
         # Save the models
         torch.save(decoder.state_dict(), os.path.join(args.model_path, 'decoder-%d.pkl' %(epoch+1)))
@@ -135,6 +148,7 @@ def main(args):
 
             avg_loss += loss.item()
             loss /= (args.batch_size * 5)
+            wandb.log({"batch_val_loss": avg_loss.item(), "batch_val_perplexity": perplexity})
 
             # Print log info
             if bi % args.log_step == 0:
@@ -144,6 +158,7 @@ def main(args):
 
         avg_loss /= (args.batch_size * total_val_step * 5)
         print('Epoch [%d/%d], Average Val Loss: %.4f, Average Val Perplexity: %5.4f' %(epoch + 1, args.num_epochs, avg_loss, np.exp(avg_loss)))
+        wandb.log({"avg_val_loss": avg_loss, "avg_val_perplexity": np.exp(avg_loss)})
 
         #Termination Condition
         overfit_warn = overfit_warn + 1 if (min_avg_loss < avg_loss) else 0

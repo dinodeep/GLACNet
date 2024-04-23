@@ -12,3 +12,4 @@ requests
 psutil
 pyyaml
 seaborn
+wandb
