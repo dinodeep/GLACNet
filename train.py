@@ -29,8 +29,8 @@ def main(args):
 
     # log into wandb
     run = wandb.init(
-        id=WANDB_KEY
-        project="11777-project-sml"
+        id=WANDB_KEY,
+        project="11777-project-wandb-test"
     )
 
     # Image preprocessing
@@ -110,7 +110,7 @@ def main(args):
             loss.backward()
             optimizer.step()
             perplexity = np.exp(loss.item())
-            wandb.log({"batch_train_loss": avg_loss.item(), "batch_train_perplexity": perplexity})
+            wandb.log({"batch_train_loss": loss.item(), "batch_train_perplexity": perplexity})
 
             # Print log info
             if bi % args.log_step == 0:
@@ -148,7 +148,7 @@ def main(args):
 
             avg_loss += loss.item()
             loss /= (args.batch_size * 5)
-            wandb.log({"batch_val_loss": avg_loss.item(), "batch_val_perplexity": perplexity})
+            wandb.log({"batch_val_loss": loss.item(), "batch_val_perplexity": perplexity})
 
             # Print log info
             if bi % args.log_step == 0:
