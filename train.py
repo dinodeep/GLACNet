@@ -27,9 +27,10 @@ def main(args):
     if not os.path.exists(args.model_path):
         os.makedirs(args.model_path)
 
+    wandb.login(key=WANDB_KEY)
+
     # log into wandb
     run = wandb.init(
-        id=WANDB_KEY,
         project="11777-project-wandb-test"
     )
 
@@ -148,6 +149,7 @@ def main(args):
 
             avg_loss += loss.item()
             loss /= (args.batch_size * 5)
+            perplexity = np.exp(loss.item())
             wandb.log({"batch_val_loss": loss.item(), "batch_val_perplexity": perplexity})
 
             # Print log info
