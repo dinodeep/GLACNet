@@ -97,7 +97,7 @@ class EncoderYOLO(nn.Module):
 
 
 class EncoderStory(nn.Module):
-    def __init__(self, img_feature_size, hidden_size, n_layers):
+    def __init__(self, img_feature_size=1024, hidden_size=1024, n_layers=2):
         super(EncoderStory, self).__init__()
 
         self.hidden_size = hidden_size
@@ -121,13 +121,16 @@ class EncoderStory(nn.Module):
 
     def forward(self, story_images):
         data_size = story_images.size()
-        local_cnn = self.cnn(story_images.view(-1, data_size[2], data_size[3], data_size[4]))
-        global_rnn, (hn, cn) = self.lstm(local_cnn.view(data_size[0], data_size[1], -1))
+        local_cnn = self.cnn(story_images.view(-1, data_size[2], data_size[3], data_size[4]))   #  local_cnn: (B * 5, img_emb_dim)
+        global_rnn, (hn, cn) = self.lstm(local_cnn.view(data_size[0], data_size[1], -1))    # global_rnn: (B, 5, hidden_dim)
         glocal = torch.cat((local_cnn.view(data_size[0], data_size[1], -1), global_rnn), 2)
+        import pdb; pdb.set_trace()
+
         output = self.linear(glocal)
         output = self.dropout(output)
         output = self.bn(output.contiguous().view(-1, self.hidden_size * 2)).view(data_size[0], data_size[1], -1)
 
+        import pdb; pdb.set_trace()
         return output, (hn, cn)
 
 
@@ -149,6 +152,11 @@ class DecoderStory(nn.Module):
         self.linear.bias.data.fill_(0)
 
     def forward(self, story_feature, captions, lengths):
+        '''
+            story_features: (5 x img_emb_dim)
+            captions: (5 x max_seq_len), max_seq_len = max(lengths)
+            lengths: list of lengths of each caption
+        '''
         story_feature = self.linear(story_feature)
         story_feature = self.dropout(story_feature)
         story_feature = F.relu(story_feature)
@@ -211,10 +219,16 @@ class DecoderRNN(nn.Module):
         self.linear.bias.data.fill_(0) 
 
     def forward(self, features, captions, lengths):
-        embeddings = self.embed(captions)
-        embeddings = self.dropout1(embeddings)
-        features = features.unsqueeze(1).expand(-1, np.amax(lengths), -1)
-        embeddings = torch.cat((features, embeddings), 2)
+        '''
+            story_features: (5 x img_emb_dim)
+            captions: (5 x max_seq_len), max_seq_len = max(lengths)
+            lengths: list of lengths of each caption
+        '''
+
+        embeddings = self.embed(captions)       # (5, max_seq_len, 256)
+        embeddings = self.dropout1(embeddings)  # (5, max_seq_len, 256)
+        features = features.unsqueeze(1).expand(-1, np.amax(lengths), -1) # (5, max_seq_len, img_emb_dim)
+        embeddings = torch.cat((features, embeddings), 2)   # (5, max_seq_len, 256 + img_emb_dim)
 
         outputs = []
         (hn, cn) = self.init_hidden()
