@@ -59,7 +59,7 @@ class EncoderYOLO(nn.Module):
             return hook
         self.yolo.model.model.model[24].register_forward_hook(get_input())
 
-        self.linear = nn.Linear(1 * 3 * 7 * 7 * 85, target_size)
+        self.linear = nn.Linear(3 * 3 * 7 * 7 * 85, target_size)
         self.bn = nn.BatchNorm1d(target_size, momentum=0.01)
 
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
@@ -71,17 +71,17 @@ class EncoderYOLO(nn.Module):
     def forward(self, images):
         _ = self.yolo(images)
 
-        # small_act = torch.clone(self.activation["small"]) # (B, 3, 8, 8, 85)
-        # medium_act = torch.clone(self.activation["medium"])
+        small_act = torch.clone(self.activation["small"]) # (B, 3, 8, 8, 85)
+        medium_act = torch.clone(self.activation["medium"])
         large_act = torch.clone(self.activation["large"])
 
-        # B, _, _, _, _ = small_act.shape
-        # small_act = small_act.reshape(B, -1)
+        B, _, _, _, _ = small_act.shape
+        small_act = small_act.reshape(B, -1)
 
-        # B, C, H, W, L = medium_act.shape
-        # medium_act = torch.permute(medium_act, (0, 1, 4, 2, 3)).reshape((B, C*L, H, W))
-        # medium_act = self.pool(medium_act)
-        # medium_act = medium_act.reshape(B, -1)
+        B, C, H, W, L = medium_act.shape
+        medium_act = torch.permute(medium_act, (0, 1, 4, 2, 3)).reshape((B, C*L, H, W))
+        medium_act = self.pool(medium_act)
+        medium_act = medium_act.reshape(B, -1)
 
         B, C, H, W, L = large_act.shape
         large_act= torch.permute(large_act, (0, 1, 4, 2, 3)).reshape((B, C*L, H, W))
@@ -90,7 +90,7 @@ class EncoderYOLO(nn.Module):
         large_act = large_act.reshape(B, -1)
 
         # concatenate all activations for encoding
-        act = torch.concat([large_act], dim=1)
+        act = torch.concat([small_act, medium_act, large_act], dim=1)
         act = self.linear(act)
         act = self.bn(act)
         return act
@@ -107,6 +107,19 @@ class EncoderStory(nn.Module):
         self.cnn = EncoderYOLO(img_feature_size)
 
         self.lstm = nn.LSTM(img_feature_size, hidden_size, n_layers, batch_first=True, bidirectional=True, dropout=0.5)
+
+        encoder_layer = nn.TransformerEncoderLayer(d_model=img_feature_size, nhead=4)
+        layer_norm = nn.LayerNorm(img_feature_size)
+        self.transformer = nn.TransformerEncoder(
+            encoder_layer,
+            num_layers=n_layers,
+            norm=layer_norm
+        )
+        self.transformer_linear = nn.Linear(
+            in_features=img_feature_size,
+            out_features=2*hidden_size
+        )
+
         self.linear = nn.Linear(hidden_size * 2 + img_feature_size, hidden_size * 2)
         self.dropout = nn.Dropout(p=0.5)
         self.bn = nn.BatchNorm1d(hidden_size * 2, momentum=0.01)
@@ -122,16 +135,18 @@ class EncoderStory(nn.Module):
     def forward(self, story_images):
         data_size = story_images.size()
         local_cnn = self.cnn(story_images.view(-1, data_size[2], data_size[3], data_size[4]))   #  local_cnn: (B * 5, img_emb_dim)
-        global_rnn, (hn, cn) = self.lstm(local_cnn.view(data_size[0], data_size[1], -1))    # global_rnn: (B, 5, hidden_dim)
-        glocal = torch.cat((local_cnn.view(data_size[0], data_size[1], -1), global_rnn), 2)
-        import pdb; pdb.set_trace()
+        local_cnn = local_cnn.view(data_size[0], data_size[1], -1)
+
+        transformer_out = self.transformer(local_cnn)
+        global_transformer = self.transformer_linear(transformer_out)
+
+        glocal = torch.cat((local_cnn, global_transformer), 2)
 
         output = self.linear(glocal)
         output = self.dropout(output)
         output = self.bn(output.contiguous().view(-1, self.hidden_size * 2)).view(data_size[0], data_size[1], -1)
 
-        import pdb; pdb.set_trace()
-        return output, (hn, cn)
+        return output, (None, None)
 
 
 class DecoderStory(nn.Module):
